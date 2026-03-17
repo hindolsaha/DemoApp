@@ -269,7 +269,7 @@ if chart_list:
         title="NAV History – Selected Funds",
     )
     fig.update_layout(height=500)
-    st.plotly_chart(fig, config={"responsive": True}, width="stretch")
+    st.plotly_chart(fig, config={"responsive": True})
 else:
     st.info("No NAV history available for selected funds.")
 
@@ -397,7 +397,7 @@ else:
                 markers=True,
             )
             fig_proj.update_layout(yaxis_tickprefix="₹", height=400)
-            st.plotly_chart(fig_proj, config={"responsive": True}, width="stretch")
+            st.plotly_chart(fig_proj, config={"responsive": True})
 
         else:
             m = 12 * n_years
@@ -469,7 +469,7 @@ else:
                 showlegend=False,
             )
 
-            st.plotly_chart(fig_sip, config={"responsive": True}, width="stretch")
+            st.plotly_chart(fig_sip, config={"responsive": True})
 
         st.caption(
             "These projections are purely illustrative, using past NAV-based CAGR as expected return. "
