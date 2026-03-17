@@ -22,6 +22,14 @@ FUND_TYPES = [
     "Others",
 ]
 
+# Default funds to load
+DEFAULT_FUNDS = [
+    "UTI Nifty Next 50 Index Fund - Direct Plan - Growth Option",
+    "UTI Nifty 50 Index Fund - Growth Option- Direct",
+    "DSP Nifty 50 Index Fund - Direct Plan - Growth",
+    "DSP Nifty Next 50 Index Fund - Direct Plan - Growth",
+]
+
 # ---------------- HELPERS ----------------
 @st.cache_data(ttl=3600)
 def load_all_schemes_df():
@@ -174,11 +182,14 @@ if options_df.empty:
 
 fund_names = options_df["schemeName"].sort_values().tolist()
 
+# Filter defaults so they exist in current options
+default_selection = [f for f in DEFAULT_FUNDS if f in fund_names]
+
 with col_sel2:
     selected_names = st.multiselect(
         f"Choose up to {MAX_FUNDS} mutual funds",
         options=fund_names,
-        default=fund_names[: min(len(fund_names), 3)],
+        default=default_selection if default_selection else fund_names[: min(len(fund_names), 3)],
         max_selections=MAX_FUNDS,
     )
 
