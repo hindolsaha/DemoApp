@@ -1,0 +1,10 @@
+Install on Your Android Phone (Test First)
+Open your Streamlit app URL in Chrome (e.g.,  https://hindolsaha-demoapp-multi-fundperformancedashboard-6sl26b.streamlit.app/
+
+Tap the three-dot menu (⋮) at top-right.
+
+Select "Add to Home screen" or "Install app" (may auto-prompt).
+​
+
+Tap "Add" or "Install" → Icon appears on home screen.
+​
