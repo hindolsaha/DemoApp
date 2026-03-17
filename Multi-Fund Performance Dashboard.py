@@ -12,16 +12,6 @@ st.set_page_config(page_title="MFAPI – Multi-Fund Performance Dashboard", layo
 MAX_FUNDS = 20
 HORIZONS_YEARS = [1, 3, 5, 10]
 
-BENCHMARK_RETURNS = {
-    # "123456": {
-    #     "benchmark_name": "NIFTY Smallcap 250 TRI",
-    #     "1Y": 32.5,
-    #     "3Y": 18.2,
-    #     "5Y": 16.1,
-    #     "10Y": 14.3,
-    # }
-}
-
 FUND_TYPES = [
     "All",
     "Large Cap",
@@ -230,53 +220,13 @@ for _, row in selected_rows.iterrows():
 perf_df = pd.DataFrame(perf_rows)
 st.dataframe(perf_df, width="stretch")
 
-# ---------------- COMPARISON VS BENCHMARK (PLACEHOLDER) ----------------
+# ---------------- SIMPLE FUND RETURNS (NO BENCHMARK) ----------------
 st.markdown("---")
-st.subheader("Fund vs Benchmark – 1 / 3 / 5 / 10 Year CAGR")
+st.subheader("Fund 1 / 3 / 5 / 10 Year CAGR (No Benchmark)")
 
-bench_rows = []
-for _, row in selected_rows.iterrows():
-    code = row["schemeCode"]
-    name = row["schemeName"]
-
-    df_nav = nav_histories.get(code, pd.DataFrame())
-    ret_map = get_horizon_returns(df_nav, horizons_years=HORIZONS_YEARS)
-
-    bdata = {
-        "Scheme Code": code,
-        "Scheme Name": name,
-    }
-
-    bench_info = BENCHMARK_RETURNS.get(code)
-    bench_name = bench_info["benchmark_name"] if bench_info else "N/A"
-
-    bdata["Benchmark"] = bench_name
-
-    for h in HORIZONS_YEARS:
-        key = f"{h}Y"
-        fund_cagr = ret_map[key]["cagr"]
-        bdata[f"{key} Fund CAGR"] = fmt_pct(fund_cagr)
-
-        if bench_info and key in bench_info:
-            b_cagr = bench_info[key] / 100.0
-            bdata[f"{key} Bench CAGR"] = fmt_pct(b_cagr)
-            if fund_cagr is not None:
-                alpha = fund_cagr - b_cagr
-                bdata[f"{key} Alpha"] = fmt_pct(alpha)
-            else:
-                bdata[f"{key} Alpha"] = "N/A"
-        else:
-            bdata[f"{key} Bench CAGR"] = "N/A"
-            bdata[f"{key} Alpha"] = "N/A"
-
-    bench_rows.append(bdata)
-
-bench_df = pd.DataFrame(bench_rows)
-st.dataframe(bench_df, width="stretch")
-st.caption(
-    "Benchmark numbers here depend on the BENCHMARK_RETURNS mapping. "
-    "MFAPI does not supply benchmark index history; you must map each fund to its index and supply returns."
-)
+cagr_cols = ["Scheme Code", "Scheme Name"] + [f"{h}Y CAGR" for h in HORIZONS_YEARS]
+fund_cagr_df = perf_df[cagr_cols].copy()
+st.dataframe(fund_cagr_df, width="stretch")
 
 # ---------------- TREND CHARTS (NAV) ----------------
 st.markdown("---")
@@ -395,7 +345,11 @@ horizon_for_expected = st.selectbox(
     index=2,
 )
 
-proj_row = perf_df[perf_df["Scheme Name"] == proj_fund]
+# Case-insensitive match for projection fund
+proj_row = perf_df[
+    perf_df["Scheme Name"].str.lower() == proj_fund.lower()
+]
+
 if proj_row.empty:
     st.info("Please select a valid fund for projection.")
 else:
@@ -447,6 +401,7 @@ else:
             st.write(f"Projected value after {n_years} years: **₹{final_value:,.0f}**")
             st.write(f"Total gain: **{gain_pct:.2f}%**")
 
+            # Build month-by-month series
             months = list(range(1, m + 1))
             values = []
             running_value = 0.0
@@ -464,6 +419,7 @@ else:
                     "Total Invested": [amount * k for k in months],
                 }
             )
+
             fig_sip = px.line(
                 df_sip,
                 x="Month",
@@ -471,6 +427,33 @@ else:
                 title="SIP Projection – Projected vs Invested Over Time",
             )
             fig_sip.update_layout(yaxis_tickprefix="₹", height=400)
+
+            # Last x
+            last_month = df_sip["Month"].iloc[-1]
+            last_proj = df_sip["Projected Value"].iloc[-1]
+            last_invested = df_sip["Total Invested"].iloc[-1]
+
+            # Add labels only at end of each line
+            fig_sip.add_scatter(
+                x=[last_month],
+                y=[last_proj],
+                mode="markers+text",
+                text=[f"Projected: ₹{last_proj:,.0f}"],
+                textposition="top center",
+                marker=dict(color="green", size=10),
+                showlegend=False,
+            )
+
+            fig_sip.add_scatter(
+                x=[last_month],
+                y=[last_invested],
+                mode="markers+text",
+                text=[f"Invested: ₹{last_invested:,.0f}"],
+                textposition="bottom center",
+                marker=dict(color="orange", size=10),
+                showlegend=False,
+            )
+
             st.plotly_chart(fig_sip, config={"responsive": True}, width="stretch")
 
         st.caption(
