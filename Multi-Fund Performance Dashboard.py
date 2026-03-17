@@ -6,7 +6,11 @@ from datetime import datetime, timedelta
 import numpy as np
 from typing import Optional
 
-st.set_page_config(page_title="MFAPI – Multi-Fund Performance Dashboard", layout="wide")
+st.set_page_config(
+    page_title="MF Dashboard",
+    page_icon="📈",  # Or replace with a custom icon path/URL
+    layout="wide",
+)
 
 # ---------------- CONFIG ----------------
 MAX_FUNDS = 20
