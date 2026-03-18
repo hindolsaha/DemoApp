@@ -236,7 +236,6 @@ st.dataframe(perf_df, width="stretch")
 # --------- Visual CAGR comparison: one bar chart per scheme (stacked vertically) ---------
 st.markdown("#### Visual CAGR comparison (one chart below another)")
 
-# Build numeric CAGR columns for plotting
 cagr_numeric_df = perf_df.copy()
 for h in HORIZONS_YEARS:
     col = f"{h}Y CAGR"
@@ -247,10 +246,8 @@ for h in HORIZONS_YEARS:
         .astype(float)
     )
 
-# For each selected scheme, build its own small bar chart and show below each other
 for _, row in cagr_numeric_df.iterrows():
     scheme_name = row["Scheme Name"]
-    # Collect this scheme's 1Y/3Y/5Y/10Y values
     data_rows = []
     for h in HORIZONS_YEARS:
         col = f"{h}Y CAGR"
@@ -307,15 +304,45 @@ for _, row in selected_rows.iterrows():
 
 if chart_list:
     nav_all = pd.concat(chart_list, ignore_index=True)
+
     fig = px.line(
         nav_all,
         x="Date",
         y="NAV",
         color="Scheme Name",
-        title="NAV History – Selected Funds",
+        title="NAV History – Selected Funds (Smoothed)",
+        line_shape="spline",
+        render_mode="svg",  # avoids scattergl+spline issue [web:255][web:249]
     )
-    fig.update_layout(height=500)
-    st.plotly_chart(fig, config={"responsive": True})
+
+    fig.update_traces(line=dict(width=2))
+
+    fig.update_layout(
+        height=450,
+        margin=dict(l=10, r=10, t=60, b=50),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="center",
+            x=0.5,
+            font=dict(size=9),
+        ),
+        xaxis=dict(
+            title="Date",
+            tickangle=0,
+            tickfont=dict(size=8),
+            showgrid=False,
+            nticks=6,
+        ),
+        yaxis=dict(
+            title="NAV",
+            tickfont=dict(size=8),
+            showgrid=True,
+        ),
+    )
+
+    st.plotly_chart(fig, use_container_width=True, config={"responsive": True})
 else:
     st.info("No NAV history available for selected funds.")
 
@@ -329,6 +356,7 @@ fund_for_yoy = st.selectbox(
 )
 
 yoy_rows = []
+# Fix: use 'schemeName' here, not 'Scheme Name'
 for _, row in selected_rows[selected_rows["schemeName"] == fund_for_yoy].iterrows():
     code = row["schemeCode"]
     name = row["schemeName"]
