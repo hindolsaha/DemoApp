@@ -8,7 +8,7 @@ from typing import Optional
 
 st.set_page_config(
     page_title="MF Dashboard",
-    page_icon="📈",  # Or replace with a custom icon path/URL
+    page_icon="📈",
     layout="wide",
 )
 
@@ -26,7 +26,6 @@ FUND_TYPES = [
     "Others",
 ]
 
-# Default funds to load
 DEFAULT_FUNDS = [
     "UTI Nifty Next 50 Index Fund - Direct Plan - Growth Option",
     "UTI Nifty 50 Index Fund - Growth Option- Direct",
@@ -186,7 +185,6 @@ if options_df.empty:
 
 fund_names = options_df["schemeName"].sort_values().tolist()
 
-# Filter defaults so they exist in current options
 default_selection = [f for f in DEFAULT_FUNDS if f in fund_names]
 
 with col_sel2:
@@ -235,6 +233,54 @@ for _, row in selected_rows.iterrows():
 perf_df = pd.DataFrame(perf_rows)
 st.dataframe(perf_df, width="stretch")
 
+# --------- Visual CAGR comparison: one column chart, 4 bars per scheme ---------
+st.markdown("#### Visual CAGR comparison (1Y / 3Y / 5Y / 10Y per scheme)")
+
+# Build numeric CAGR columns for plotting
+cagr_numeric_df = perf_df.copy()
+for h in HORIZONS_YEARS:
+    col = f"{h}Y CAGR"
+    cagr_numeric_df[col] = (
+        cagr_numeric_df[col]
+        .str.replace("%", "", regex=False)
+        .replace("N/A", np.nan)
+        .astype(float)
+    )
+
+# Long format: each row = one scheme + one horizon
+long_cagr = cagr_numeric_df.melt(
+    id_vars=["Scheme Name"],
+    value_vars=[f"{h}Y CAGR" for h in HORIZONS_YEARS],
+    var_name="Horizon",
+    value_name="CAGR",
+)
+
+# Clean horizon labels and create text labels
+long_cagr["Horizon"] = long_cagr["Horizon"].str.replace(" CAGR", "", regex=False)
+long_cagr["CAGR_label"] = long_cagr["CAGR"].round(2).astype(str) + "%"
+
+# One graph: X = scheme, 4 bars per scheme = horizons
+fig_cagr_bar = px.bar(
+    long_cagr,
+    x="Scheme Name",
+    y="CAGR",
+    color="Horizon",         # 1Y / 3Y / 5Y / 10Y
+    barmode="group",
+    text="CAGR_label",
+    title="Scheme-wise CAGR for 1Y / 3Y / 5Y / 10Y",
+)
+
+fig_cagr_bar.update_traces(textposition="outside")
+
+fig_cagr_bar.update_layout(
+    xaxis_title="Scheme Name",
+    yaxis_title="CAGR (%)",
+    xaxis_tickangle=-30,
+    height=550,
+)
+
+st.plotly_chart(fig_cagr_bar, config={"responsive": True})
+
 # ---------------- SIMPLE FUND RETURNS (NO BENCHMARK) ----------------
 st.markdown("---")
 st.subheader("Fund 1 / 3 / 5 / 10 Year CAGR (No Benchmark)")
@@ -243,7 +289,7 @@ cagr_cols = ["Scheme Code", "Scheme Name"] + [f"{h}Y CAGR" for h in HORIZONS_YEA
 fund_cagr_df = perf_df[cagr_cols].copy()
 st.dataframe(fund_cagr_df, width="stretch")
 
-# ---------------- TREND CHARTS (NAV) ----------------
+# ---------------- NAV TREND ----------------
 st.markdown("---")
 st.subheader("NAV Trend – Last 10 Years (if available)")
 
@@ -273,7 +319,7 @@ if chart_list:
 else:
     st.info("No NAV history available for selected funds.")
 
-# ---------------- YEAR-ON-YEAR RETURNS (PER-SELECTED-FUND) ----------------
+# ---------------- YOY RETURNS ----------------
 st.markdown("---")
 st.subheader("Year-on-Year (YoY) NAV-based Returns (Approx XIRR)")
 
@@ -319,7 +365,7 @@ if yoy_rows:
 else:
     st.info("Not enough data to compute YoY returns for the selected fund.")
 
-# ---------------- INVESTMENT PROJECTION (SIP / LUMPSUM) ----------------
+# ---------------- INVESTMENT PROJECTION ----------------
 st.markdown("---")
 st.subheader("Investment Projection – SIP / Lump Sum (Tentative)")
 
@@ -360,7 +406,6 @@ horizon_for_expected = st.selectbox(
     index=2,
 )
 
-# Case-insensitive match for projection fund
 proj_row = perf_df[
     perf_df["Scheme Name"].str.lower() == proj_fund.lower()
 ]
@@ -416,7 +461,6 @@ else:
             st.write(f"Projected value after {n_years} years: **₹{final_value:,.0f}**")
             st.write(f"Total gain: **{gain_pct:.2f}%**")
 
-            # Build month-by-month series
             months = list(range(1, m + 1))
             values = []
             running_value = 0.0
@@ -443,12 +487,10 @@ else:
             )
             fig_sip.update_layout(yaxis_tickprefix="₹", height=400)
 
-            # Last x
             last_month = df_sip["Month"].iloc[-1]
             last_proj = df_sip["Projected Value"].iloc[-1]
             last_invested = df_sip["Total Invested"].iloc[-1]
 
-            # Add labels only at end of each line
             fig_sip.add_scatter(
                 x=[last_month],
                 y=[last_proj],
