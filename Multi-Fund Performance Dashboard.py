@@ -233,8 +233,8 @@ for _, row in selected_rows.iterrows():
 perf_df = pd.DataFrame(perf_rows)
 st.dataframe(perf_df, width="stretch")
 
-# --------- Visual CAGR comparison: separate bar chart per scheme ---------
-st.markdown("#### Visual CAGR comparison (per scheme, 1Y / 3Y / 5Y / 10Y)")
+# --------- Visual CAGR comparison: one bar chart per scheme (stacked vertically) ---------
+st.markdown("#### Visual CAGR comparison (one chart below another)")
 
 # Build numeric CAGR columns for plotting
 cagr_numeric_df = perf_df.copy()
@@ -247,45 +247,39 @@ for h in HORIZONS_YEARS:
         .astype(float)
     )
 
-# Long format: each row = one scheme + one horizon
-long_cagr = cagr_numeric_df.melt(
-    id_vars=["Scheme Name"],
-    value_vars=[f"{h}Y CAGR" for h in HORIZONS_YEARS],
-    var_name="Horizon",
-    value_name="CAGR",
-)
+# For each selected scheme, build its own small bar chart and show below each other
+for _, row in cagr_numeric_df.iterrows():
+    scheme_name = row["Scheme Name"]
+    # Collect this scheme's 1Y/3Y/5Y/10Y values
+    data_rows = []
+    for h in HORIZONS_YEARS:
+        col = f"{h}Y CAGR"
+        val = row[col]
+        data_rows.append({"Horizon": f"{h}Y", "CAGR": val})
 
-long_cagr["Horizon"] = long_cagr["Horizon"].str.replace(" CAGR", "", regex=False)
-long_cagr["CAGR_label"] = long_cagr["CAGR"].round(2).astype(str) + "%"
+    df_scheme = pd.DataFrame(data_rows)
+    df_scheme["CAGR_label"] = df_scheme["CAGR"].round(2).astype(str) + "%"
 
-# Faceted bar chart: each scheme gets its own graph, 4 bars (1Y/3Y/5Y/10Y)
-fig_cagr_facet = px.bar(
-    long_cagr,
-    x="Horizon",
-    y="CAGR",
-    facet_col="Scheme Name",
-    facet_col_wrap=2,  # change to 3 if many schemes
-    text="CAGR_label",
-    title="Scheme-wise CAGR for 1Y / 3Y / 5Y / 10Y",
-)
+    fig_scheme = px.bar(
+        df_scheme,
+        x="Horizon",
+        y="CAGR",
+        text="CAGR_label",
+        title=f"{scheme_name} – CAGR for 1Y / 3Y / 5Y / 10Y",
+    )
 
-fig_cagr_facet.update_traces(textposition="outside")
+    fig_scheme.update_traces(
+        textposition="outside",
+        marker=dict(line=dict(width=1.5, color="black")),
+    )
 
-# Adjust layout height based on number of schemes
-num_schemes = len(selected_names)
-rows = int(np.ceil(num_schemes / 2))
-fig_cagr_facet.update_layout(
-    yaxis_title="CAGR (%)",
-    height=300 * rows,
-    showlegend=False,
-)
+    fig_scheme.update_layout(
+        yaxis_title="CAGR (%)",
+        height=350,
+        xaxis_title="Duration",
+    )
 
-# Clean facet titles to just scheme name
-fig_cagr_facet.for_each_annotation(
-    lambda a: a.update(text=a.text.split("=")[-1])
-)
-
-st.plotly_chart(fig_cagr_facet, config={"responsive": True})
+    st.plotly_chart(fig_scheme, config={"responsive": True})
 
 # ---------------- SIMPLE FUND RETURNS (NO BENCHMARK) ----------------
 st.markdown("---")
