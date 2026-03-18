@@ -233,8 +233,8 @@ for _, row in selected_rows.iterrows():
 perf_df = pd.DataFrame(perf_rows)
 st.dataframe(perf_df, width="stretch")
 
-# --------- Visual CAGR comparison: one column chart, 4 bars per scheme ---------
-st.markdown("#### Visual CAGR comparison (1Y / 3Y / 5Y / 10Y per scheme)")
+# --------- Visual CAGR comparison: separate bar chart per scheme ---------
+st.markdown("#### Visual CAGR comparison (per scheme, 1Y / 3Y / 5Y / 10Y)")
 
 # Build numeric CAGR columns for plotting
 cagr_numeric_df = perf_df.copy()
@@ -255,31 +255,37 @@ long_cagr = cagr_numeric_df.melt(
     value_name="CAGR",
 )
 
-# Clean horizon labels and create text labels
 long_cagr["Horizon"] = long_cagr["Horizon"].str.replace(" CAGR", "", regex=False)
 long_cagr["CAGR_label"] = long_cagr["CAGR"].round(2).astype(str) + "%"
 
-# One graph: X = scheme, 4 bars per scheme = horizons
-fig_cagr_bar = px.bar(
+# Faceted bar chart: each scheme gets its own graph, 4 bars (1Y/3Y/5Y/10Y)
+fig_cagr_facet = px.bar(
     long_cagr,
-    x="Scheme Name",
+    x="Horizon",
     y="CAGR",
-    color="Horizon",         # 1Y / 3Y / 5Y / 10Y
-    barmode="group",
+    facet_col="Scheme Name",
+    facet_col_wrap=2,  # change to 3 if many schemes
     text="CAGR_label",
     title="Scheme-wise CAGR for 1Y / 3Y / 5Y / 10Y",
 )
 
-fig_cagr_bar.update_traces(textposition="outside")
+fig_cagr_facet.update_traces(textposition="outside")
 
-fig_cagr_bar.update_layout(
-    xaxis_title="Scheme Name",
+# Adjust layout height based on number of schemes
+num_schemes = len(selected_names)
+rows = int(np.ceil(num_schemes / 2))
+fig_cagr_facet.update_layout(
     yaxis_title="CAGR (%)",
-    xaxis_tickangle=-30,
-    height=550,
+    height=300 * rows,
+    showlegend=False,
 )
 
-st.plotly_chart(fig_cagr_bar, config={"responsive": True})
+# Clean facet titles to just scheme name
+fig_cagr_facet.for_each_annotation(
+    lambda a: a.update(text=a.text.split("=")[-1])
+)
+
+st.plotly_chart(fig_cagr_facet, config={"responsive": True})
 
 # ---------------- SIMPLE FUND RETURNS (NO BENCHMARK) ----------------
 st.markdown("---")
