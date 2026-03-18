@@ -31,6 +31,7 @@ DEFAULT_FUNDS = [
     "UTI Nifty 50 Index Fund - Growth Option- Direct",
     "DSP Nifty 50 Index Fund - Direct Plan - Growth",
     "DSP Nifty Next 50 Index Fund - Direct Plan - Growth",
+    "Aditya Birla Sun Life Gold Fund - Growth - Direct Plan",
 ]
 
 # ---------------- HELPERS ----------------
@@ -151,6 +152,12 @@ st.caption(
 
 schemes_df = load_all_schemes_df()
 
+# ---- Last data refresh status ----
+st.markdown(
+    f"**Data status:** Fetched from MFAPI.in on "
+    f"{datetime.today().strftime('%d-%b-%Y %H:%M')} (local time)."
+)
+
 st.markdown("### Fund selection")
 
 col_type, col_sel1, col_sel2 = st.columns([1.5, 2, 3])
@@ -261,7 +268,6 @@ st.subheader("Risk Factor – Annualized Volatility for Selected Schemes")
 risk_df = pd.DataFrame(risk_rows)
 st.dataframe(risk_df, width="stretch")
 
-# Simple risk bar chart
 risk_numeric = risk_df.copy()
 risk_numeric["Risk_Value"] = (
     risk_numeric["Annualized Volatility (Risk)"]
@@ -654,7 +660,6 @@ if action == "Goal-based Target Amount – Suggest Best 2 Funds (10Y CAGR)":
         f"Using **10 year** historical CAGR column ({closest_col}) to evaluate funds for this goal."
     )
 
-    # Prepare numeric 10Y CAGR for all selected funds
     perf_numeric = perf_df.copy()
     perf_numeric[closest_col] = (
         perf_numeric[closest_col]
@@ -669,7 +674,6 @@ if action == "Goal-based Target Amount – Suggest Best 2 Funds (10Y CAGR)":
     if perf_10y.empty:
         st.info("No valid 10Y CAGR data available for selected funds.")
     else:
-        # Sort by highest 10Y CAGR and pick top 2
         perf_sorted = perf_10y.sort_values(closest_col, ascending=False)
         top2 = perf_sorted.head(2).copy()
 
@@ -677,7 +681,7 @@ if action == "Goal-based Target Amount – Suggest Best 2 Funds (10Y CAGR)":
         for _, r in top2.iterrows():
             name = r["Scheme Name"]
             code = r["Scheme Code"]
-            ann_return = r[closest_col]  # decimal annual rate
+            ann_return = r[closest_col]
             n = float(target_years)
 
             if goal_mode == "Lump sum today":
