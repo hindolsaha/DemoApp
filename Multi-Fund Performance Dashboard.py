@@ -143,7 +143,7 @@ def filter_by_fund_type(df: pd.DataFrame, fund_type: str) -> pd.DataFrame:
 
     return df[mask]
 
-# ---------------- LOAD SCHEMES & SELECT FUNDS ----------------
+# ---------------- LOAD SCHEMES & BASIC INFO ----------------
 st.title("Mutual Fund Multi-Fund Performance Dashboard")
 st.caption(
     "Source: MFAPI.in – NAV-based approximations for 1, 3, 5, 10 year trends. "
@@ -158,21 +158,21 @@ st.markdown(
     "- **NAV (Net Asset Value)**: The per-unit price of a mutual fund, "
     "calculated as the total value of the fund's assets minus its liabilities, "
     "divided by the number of units outstanding. It tells you the current value "
-    "of one unit of the scheme.[web:1][web:2][web:3][web:8]"
+    "of one unit of the scheme.[web:31][web:34]"
 )
 
 st.markdown(
     "- **CAGR (Compounded Annual Growth Rate)**: The constant annual rate at which "
     "an investment would have grown from its starting value to its ending value "
     "over a period, assuming profits are reinvested. It smooths out year-to-year "
-    "fluctuations to show average annual growth.[web:6][web:9]"
+    "fluctuations to show average annual growth.[web:39][web:40]"
 )
 
 st.markdown(
     "- **XIRR (Extended Internal Rate of Return)**: An annualised return measure "
     "that considers the exact dates and amounts of multiple investments and "
     "withdrawals. It is especially useful for SIPs and irregular cash flows, "
-    "because it reflects the actual investor experience.[web:7][web:10]"
+    "because it reflects the actual investor experience.[web:31][web:32][web:33]"
 )
 
 schemes_df = load_all_schemes_df()
@@ -183,6 +183,7 @@ st.markdown(
     f"{datetime.today().strftime('%d-%b-%Y %H:%M')} (local time)."
 )
 
+# ---------------- FUND SELECTION ----------------
 st.markdown("### Fund selection")
 
 col_type, col_sel1, col_sel2 = st.columns([1.5, 2, 3])
@@ -234,9 +235,37 @@ if not selected_names:
 selected_rows = options_df[options_df["schemeName"].isin(selected_names)].copy()
 selected_rows["schemeCode"] = selected_rows["schemeCode"].astype(str)
 
+# ---------------- CHOOSE ACTION ----------------
+st.markdown("---")
+st.subheader("Choose what you want to do")
+
+st.markdown(
+    "- **Investment Projection – SIP / Lump Sum**"
+)
+st.markdown(
+    "- **Goal-based Target Amount – Suggest Best 2 Funds (10Y CAGR)**"
+)
+st.markdown(
+    "- **Goal-based Target Amount – Suggest Best 2 Funds (Using 10Y CAGR)**"
+)
+st.markdown(
+    "Enter the **target amount** and **time frame**. "
+    "The tool will use the **10 year historical CAGR (10Y CAGR)** of all selected funds "
+    "to suggest the top 2 funds for this goal.[web:31][web:32][web:33][web:34][web:39][web:40]"
+)
+
+action = st.radio(
+    "",
+    options=[
+        "Investment Projection – SIP / Lump Sum",
+        "Goal-based Target Amount – Suggest Best 2 Funds (10Y CAGR)",
+    ],
+    index=0,
+)
+
 st.markdown("---")
 
-# ---------------- COMPUTE RETURNS & RISK FOR EACH FUND ----------------
+# ---------------- 1 / 3 / 5 / 10 YEAR TREND – CAGR & Avg Annual Return ----------------
 st.subheader("1 / 3 / 5 / 10 Year Trend – CAGR & Avg Annual Return")
 
 perf_rows = []
@@ -291,7 +320,7 @@ st.markdown("---")
 st.subheader("Risk Factor – Annualized Volatility for Selected Schemes")
 
 risk_df = pd.DataFrame(risk_rows)
-st.dataframe(risk_df, width="stretch")
+st.dataframe(risk_df, width="stretch", height="auto")
 
 risk_numeric = risk_df.copy()
 risk_numeric["Risk_Value"] = (
@@ -319,7 +348,7 @@ st.caption(
     "Higher values mean more variability and therefore higher risk."
 )
 
-# --------- Visual CAGR comparison: one bar chart per scheme (stacked vertically) ---------
+# --------- Visual CAGR comparison: one bar chart per scheme ---------
 st.markdown("#### Visual CAGR comparison (one chart below another)")
 
 cagr_numeric_df = perf_df.copy()
@@ -364,13 +393,42 @@ for _, row in cagr_numeric_df.iterrows():
 
     st.plotly_chart(fig_scheme, config={"responsive": True})
 
-# ---------------- SIMPLE FUND RETURNS (NO BENCHMARK) ----------------
+# ---------------- SIMPLE FUND RETURNS (NO BENCHMARK) – MOBILE FRIENDLY NAVBAR ----------------
 st.markdown("---")
 st.subheader("Fund 1 / 3 / 5 / 10 Year CAGR (No Benchmark)")
 
 cagr_cols = ["Scheme Code", "Scheme Name"] + [f"{h}Y CAGR" for h in HORIZONS_YEARS]
 fund_cagr_df = perf_df[cagr_cols].copy()
-st.dataframe(fund_cagr_df, width="stretch")
+
+# Horizontal navigation bar for this section
+view_mode = st.radio(
+    "Select view",
+    options=["Overview", "1Y", "3Y", "5Y", "10Y"],
+    horizontal=True,
+)
+
+if view_mode == "Overview":
+    st.write("All selected funds with their 1 / 3 / 5 / 10 year CAGR values.")
+    # wider width => visible horizontal scroll on mobile[web:90]
+    st.dataframe(fund_cagr_df, width=900, height="auto")
+else:
+    horizon = view_mode.replace("Y", "")  # "1", "3", "5", "10"
+    col_label = f"{horizon}Y CAGR"
+    st.write(f"Funds sorted by {horizon}Y CAGR.")
+
+    df_h = fund_cagr_df.copy()
+    df_h[f"{horizon}Y_num"] = (
+        df_h[col_label]
+        .str.replace("%", "", regex=False)
+        .replace("N/A", np.nan)
+        .astype(float)
+    )
+    df_h = df_h.sort_values(f"{horizon}Y_num", ascending=False)
+    st.dataframe(
+        df_h[["Scheme Code", "Scheme Name", col_label]],
+        width=900,   # forces horizontal scrollbar if needed on phone[web:86][web:90]
+        height="auto",
+    )
 
 # ---------------- NAV TREND ----------------
 st.markdown("---")
@@ -470,7 +528,7 @@ for _, row in selected_rows[selected_rows["schemeName"] == fund_for_yoy].iterrow
 
 if yoy_rows:
     yoy_df = pd.DataFrame(yoy_rows).sort_values("Year", ascending=False)
-    st.dataframe(yoy_df, width="stretch")
+    st.dataframe(yoy_df, width="stretch", height="auto")
     st.caption(
         "YoY returns above are NAV-based approximations and not true XIRR "
         "(which requires actual cash-flow data from your investments)."
@@ -478,19 +536,9 @@ if yoy_rows:
 else:
     st.info("Not enough data to compute YoY returns for the selected fund.")
 
-# ---------------- ACTION SELECTION ----------------
-st.markdown("---")
-action = st.radio(
-    "Choose what you want to do",
-    options=[
-        "Investment Projection – SIP / Lump Sum",
-        "Goal-based Target Amount – Suggest Best 2 Funds (10Y CAGR)",
-    ],
-    index=0,
-)
-
-# ---------------- INVESTMENT PROJECTION ----------------
+# ---------------- INVESTMENT PROJECTION (CONDITIONAL) ----------------
 if action == "Investment Projection – SIP / Lump Sum":
+    st.markdown("---")
     st.subheader("Investment Projection – SIP / Lump Sum (Tentative)")
 
     col_inv1, col_inv2, col_inv3 = st.columns(3)
@@ -555,7 +603,7 @@ if action == "Investment Projection – SIP / Lump Sum":
                 st.write(f"Projected value after {n_years} years: **₹{final_value:,.0f}**")
                 st.write(f"Total gain: **{gain_pct:.2f}%**")
 
-                years_axis = list(range(0, n_years + 1))
+                years_axis = list(range(0, int(n_years) + 1))
                 values = [amount * (1.0 + r) ** y for y in years_axis]
                 df_proj = pd.DataFrame({"Year": years_axis, "Projected Value": values})
                 fig_proj = px.line(
@@ -569,7 +617,7 @@ if action == "Investment Projection – SIP / Lump Sum":
                 st.plotly_chart(fig_proj, config={"responsive": True})
 
             else:
-                m = 12 * n_years
+                m = int(12 * n_years)
                 i = (1.0 + r) ** (1.0 / 12.0) - 1.0
                 if i <= 0:
                     final_value = amount * m
@@ -642,14 +690,15 @@ if action == "Investment Projection – SIP / Lump Sum":
                 "They are not guaranteed and not investment advice."
             )
 
-# ---------------- GOAL-BASED FUND SUGGESTION (10Y CAGR) ----------------
+# ---------------- GOAL-BASED FUND SUGGESTION (CONDITIONAL) ----------------
 if action == "Goal-based Target Amount – Suggest Best 2 Funds (10Y CAGR)":
+    st.markdown("---")
     st.subheader("Goal-based Target Amount – Suggest Best 2 Funds (Using 10Y CAGR)")
 
     st.markdown(
         "Enter the **target amount** and **time frame**. "
         "The tool will use the **10 year historical CAGR (10Y CAGR)** of all selected funds "
-        "to suggest the top 2 funds for this goal."
+        "to suggest the top 2 funds for this goal.[web:31][web:32][web:33][web:34][web:39][web:40]"
     )
 
     goal_mode = st.radio(
@@ -738,7 +787,7 @@ if action == "Goal-based Target Amount – Suggest Best 2 Funds (10Y CAGR)":
                 )
 
         goal_df = pd.DataFrame(results)
-        st.dataframe(goal_df, width="stretch")
+        st.dataframe(goal_df, width="stretch", height="auto")
 
         st.caption(
             "Above suggestions are based purely on 10-year NAV-based CAGR of selected funds "
