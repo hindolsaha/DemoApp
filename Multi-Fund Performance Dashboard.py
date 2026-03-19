@@ -273,12 +273,9 @@ if perf_df.empty:
     st.warning("No valid 1/3/5/10 year data could be computed for the selected funds.")
 else:
     st.dataframe(perf_df, width=1000)
-    
-#-----------------------------------------------------------------------------------------------
+
 # ---------------- ACTION SELECTION ----------------
-#st.caption( "---------------")	
 st.markdown("---")
-st.subheader("Future Investment target Prediction")
 action = st.radio(
     "Choose what you want to do",
     options=[
@@ -286,6 +283,7 @@ action = st.radio(
         "Goal-based Target Amount – Suggest Best 2 Funds (10Y CAGR)",
     ],
     index=0,
+    key="action_selector",
 )
 
 # ---------------- INVESTMENT PROJECTION ----------------
@@ -305,6 +303,7 @@ if action == "Investment Projection – SIP / Lump Sum":
         invest_mode = st.radio(
             "Investment mode",
             options=["SIP (monthly)", "Lump sum"],
+            key="invest_mode",
         )
 
     with col_inv3:
@@ -456,6 +455,7 @@ if action == "Goal-based Target Amount – Suggest Best 2 Funds (10Y CAGR)":
         options=["Lump sum today", "Monthly SIP"],
         index=0,
         horizontal=True,
+        key="goal_mode",
     )
 
     goal_col1, goal_col2 = st.columns(2)
@@ -542,11 +542,8 @@ if action == "Goal-based Target Amount – Suggest Best 2 Funds (10Y CAGR)":
         st.caption(
             "Above suggestions are based purely on 10-year NAV-based CAGR of selected funds "
             "and standard compound interest formulas. They are indicative only, not investment advice."
-        )													
-#-----------------------------------------------------------------------------------------    
-st.caption(
-            ""
-        )	
+        )
+
 # ---------------- RISK FACTOR SECTION ----------------
 st.markdown("---")
 st.subheader("Risk Factor – Annualized Volatility for Selected Schemes")
@@ -582,8 +579,8 @@ if not risk_df.empty:
     )
 else:
     st.info("No sufficient NAV history to compute risk for selected funds.")
-st.caption( "---------------")	
-# --------- Visual CAGR comparison: one bar chart per scheme ---------
+
+# --------- Visual CAGR comparison ---------
 if not perf_df.empty:
     st.markdown("#### Visual CAGR comparison – 1Y, 3Y, 5Y, 10Y per fund")
 
@@ -704,7 +701,7 @@ if chart_list:
 else:
     st.info("No NAV history available for selected funds.")
 
-# ---------------- YOY RETURNS ----------------
+# ---------------- YOY RETURNS + GRAPH ----------------
 st.markdown("---")
 st.subheader("Year-on-Year (YoY) NAV-based Returns (Approx XIRR)")
 
@@ -714,7 +711,6 @@ fund_for_yoy = st.selectbox(
 )
 
 yoy_rows = []
-# FIX: use 'schemeName' column here (not 'Scheme Name')
 for _, row in selected_rows[selected_rows["schemeName"] == fund_for_yoy].iterrows():
     code = row["schemeCode"]
     name = row["schemeName"]
@@ -742,12 +738,44 @@ for _, row in selected_rows[selected_rows["schemeName"] == fund_for_yoy].iterrow
         )
 
 if yoy_rows:
-    yoy_df = pd.DataFrame(yoy_rows).sort_values("Year", ascending=False)
+    yoy_df = pd.DataFrame(yoy_rows).sort_values("Year", ascending=True)
     st.dataframe(yoy_df, width="stretch")
+
+    # YoY bar chart – easy for non-users to understand
+    yoy_df["YoY_numeric"] = (
+        yoy_df["YoY Return (approx XIRR)"]
+        .str.replace("%", "", regex=False)
+        .astype(float)
+    )
+
+    fig_yoy = px.bar(
+        yoy_df,
+        x="Year",
+        y="YoY_numeric",
+        title=f"Year-on-Year (YoY) NAV-based Returns – {fund_for_yoy}",
+        text=yoy_df["YoY_numeric"].round(2).astype(str) + "%",
+    )
+
+    fig_yoy.update_traces(
+        textposition="outside",
+        marker=dict(
+            color=np.where(yoy_df["YoY_numeric"] >= 0, "seagreen", "crimson"),
+            line=dict(width=1, color="black"),
+        ),
+    )
+
+    fig_yoy.update_layout(
+        yaxis_title="Return (%)",
+        xaxis_title="Calendar Year",
+        height=450,
+        bargap=0.3,
+    )
+
+    st.plotly_chart(fig_yoy, use_container_width=True)
+
     st.caption(
-        "YoY returns above are NAV-based approximations and not true XIRR "
-        "(which requires actual cash-flow data from your investments).[web:118]"
+        "Each bar shows how much the fund gained (green) or lost (red) in that calendar year, "
+        "based only on NAV at the start and end of the year.[web:139]"
     )
 else:
     st.info("Not enough data to compute YoY returns for the selected fund.")
-
