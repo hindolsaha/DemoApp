@@ -273,213 +273,12 @@ if perf_df.empty:
     st.warning("No valid 1/3/5/10 year data could be computed for the selected funds.")
 else:
     st.dataframe(perf_df, width=1000)
-
-# ---------------- RISK FACTOR SECTION ----------------
-st.markdown("---")
-st.subheader("Risk Factor – Annualized Volatility for Selected Schemes")
-
-risk_df = pd.DataFrame(risk_rows)
-if not risk_df.empty:
-    st.dataframe(risk_df, width="stretch")
-
-    risk_numeric = risk_df.copy()
-    risk_numeric["Risk_Value"] = (
-        risk_numeric["Annualized Volatility (Risk)"]
-        .str.replace("%", "", regex=False)
-        .replace("N/A", np.nan)
-        .astype(float)
-    )
-
-    fig_risk = px.bar(
-        risk_numeric,
-        x="Scheme Name",
-        y="Risk_Value",
-        title="Annualized Volatility (Risk) – Higher = More Volatile",
-    )
-    fig_risk.update_layout(
-        yaxis_title="Annualized Volatility (%)",
-        xaxis_title="Scheme",
-        height=400,
-    )
-    st.plotly_chart(fig_risk, use_container_width=True, config={"responsive": True})
-
-    st.caption(
-        "Risk is approximated here as annualized volatility (standard deviation of daily NAV returns). "
-        "Higher values mean more variability and therefore higher risk.[web:118]"
-    )
-else:
-    st.info("No sufficient NAV history to compute risk for selected funds.")
-
-# --------- Visual CAGR comparison: one bar chart per scheme ---------
-if not perf_df.empty:
-    st.markdown("#### Visual CAGR comparison – 1Y, 3Y, 5Y, 10Y per fund")
-
-    cagr_numeric_df = perf_df.copy()
-    for h in HORIZONS_YEARS:
-        col = f"{h}Y CAGR"
-        cagr_numeric_df[col] = (
-            cagr_numeric_df[col]
-            .str.replace("%", "", regex=False)
-            .replace("N/A", np.nan)
-            .astype(float)
-        )
-
-    for _, row in cagr_numeric_df.iterrows():
-        scheme_name = row["Scheme Name"]
-        data_rows = []
-        for h in HORIZONS_YEARS:
-            col = f"{h}Y CAGR"
-            val = row[col]
-            if not pd.isna(val):
-                data_rows.append({"Horizon": f"{h}Y", "CAGR": val})
-
-        if not data_rows:
-            continue
-
-        df_scheme = pd.DataFrame(data_rows)
-        df_scheme["CAGR_label"] = df_scheme["CAGR"].round(2).astype(str) + "%"
-
-        fig_scheme = px.bar(
-            df_scheme,
-            x="Horizon",
-            y="CAGR",
-            text="CAGR_label",
-            title=f"{scheme_name} – CAGR for 1Y / 3Y / 5Y / 10Y",
-        )
-
-        fig_scheme.update_traces(
-            textposition="outside",
-            marker=dict(line=dict(width=1.5, color="black")),
-        )
-
-        fig_scheme.update_layout(
-            yaxis_title="CAGR (%)",
-            height=350,
-            xaxis_title="Duration",
-        )
-
-        st.plotly_chart(fig_scheme, config={"responsive": True})
-
-# ---------------- SIMPLE FUND RETURNS (NO BENCHMARK) ----------------
-st.markdown("---")
-st.subheader("Fund 1 / 3 / 5 / 10 Year CAGR (No Benchmark)")
-
-if not perf_df.empty:
-    cagr_cols = ["Scheme Code", "Scheme Name"] + [f"{h}Y CAGR" for h in HORIZONS_YEARS]
-    fund_cagr_df = perf_df[cagr_cols].copy()
-    st.dataframe(fund_cagr_df, width="stretch")
-else:
-    st.info("No CAGR data to display in the summary table.")
-
-# ---------------- NAV TREND ----------------
-st.markdown("---")
-st.subheader("NAV Trend – Last 10 Years (if available)")
-
-chart_list = []
-for _, row in selected_rows.iterrows():
-    code = row["schemeCode"]
-    name = row["schemeName"]
-
-    df_nav = nav_histories.get(code, pd.DataFrame())
-    if df_nav.empty:
-        continue
-    df_plot = df_nav.copy()
-    df_plot["Scheme Name"] = name
-    chart_list.append(df_plot)
-
-if chart_list:
-    nav_all = pd.concat(chart_list, ignore_index=True)
-
-    fig = px.line(
-        nav_all,
-        x="Date",
-        y="NAV",
-        color="Scheme Name",
-        title="NAV History – Selected Funds (Smoothed)",
-        line_shape="spline",
-        render_mode="svg",
-    )
-
-    fig.update_traces(line=dict(width=2))
-
-    fig.update_layout(
-        height=450,
-        margin=dict(l=10, r=10, t=60, b=50),
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="center",
-            x=0.5,
-            font=dict(size=9),
-        ),
-        xaxis=dict(
-            title="Date",
-            tickangle=0,
-            tickfont=dict(size=8),
-            showgrid=False,
-            nticks=6,
-        ),
-        yaxis=dict(
-            title="NAV",
-            tickfont=dict(size=8),
-            showgrid=True,
-        ),
-    )
-
-    st.plotly_chart(fig, use_container_width=True, config={"responsive": True})
-else:
-    st.info("No NAV history available for selected funds.")
-
-# ---------------- YOY RETURNS ----------------
-st.markdown("---")
-st.subheader("Year-on-Year (YoY) NAV-based Returns (Approx XIRR)")
-
-fund_for_yoy = st.selectbox(
-    "Select a fund (from above selection) for detailed YoY returns",
-    options=selected_rows["schemeName"].tolist(),
-)
-
-yoy_rows = []
-# FIX: use 'schemeName' column here (not 'Scheme Name')
-for _, row in selected_rows[selected_rows["schemeName"] == fund_for_yoy].iterrows():
-    code = row["schemeCode"]
-    name = row["schemeName"]
-    df_nav = nav_histories.get(code, pd.DataFrame())
-    if df_nav.empty:
-        continue
-
-    df_nav = df_nav.copy()
-    df_nav["Year"] = df_nav["Date"].dt.year
-
-    grp = df_nav.groupby("Year")
-    for yr, g in grp:
-        if g.shape[0] < 2:
-            continue
-        g = g.sort_values("Date")
-        start_nav = g.iloc[0]["NAV"]
-        end_nav = g.iloc[-1]["NAV"]
-        ret = end_nav / start_nav - 1.0
-        yoy_rows.append(
-            {
-                "Scheme Name": name,
-                "Year": int(yr),
-                "YoY Return (approx XIRR)": fmt_pct(ret),
-            }
-        )
-
-if yoy_rows:
-    yoy_df = pd.DataFrame(yoy_rows).sort_values("Year", ascending=False)
-    st.dataframe(yoy_df, width="stretch")
-    st.caption(
-        "YoY returns above are NAV-based approximations and not true XIRR "
-        "(which requires actual cash-flow data from your investments).[web:118]"
-    )
-else:
-    st.info("Not enough data to compute YoY returns for the selected fund.")
-
+    
+#-----------------------------------------------------------------------------------------------
 # ---------------- ACTION SELECTION ----------------
+#st.caption( "---------------")	
 st.markdown("---")
+st.subheader("Future Investment target Prediction")
 action = st.radio(
     "Choose what you want to do",
     options=[
@@ -744,3 +543,211 @@ if action == "Goal-based Target Amount – Suggest Best 2 Funds (10Y CAGR)":
             "Above suggestions are based purely on 10-year NAV-based CAGR of selected funds "
             "and standard compound interest formulas. They are indicative only, not investment advice."
         )													
+#-----------------------------------------------------------------------------------------    
+st.caption(
+            ""
+        )	
+# ---------------- RISK FACTOR SECTION ----------------
+st.markdown("---")
+st.subheader("Risk Factor – Annualized Volatility for Selected Schemes")
+
+risk_df = pd.DataFrame(risk_rows)
+if not risk_df.empty:
+    st.dataframe(risk_df, width="stretch")
+
+    risk_numeric = risk_df.copy()
+    risk_numeric["Risk_Value"] = (
+        risk_numeric["Annualized Volatility (Risk)"]
+        .str.replace("%", "", regex=False)
+        .replace("N/A", np.nan)
+        .astype(float)
+    )
+
+    fig_risk = px.bar(
+        risk_numeric,
+        x="Scheme Name",
+        y="Risk_Value",
+        title="Annualized Volatility (Risk) – Higher = More Volatile",
+    )
+    fig_risk.update_layout(
+        yaxis_title="Annualized Volatility (%)",
+        xaxis_title="Scheme",
+        height=400,
+    )
+    st.plotly_chart(fig_risk, use_container_width=True, config={"responsive": True})
+
+    st.caption(
+        "Risk is approximated here as annualized volatility (standard deviation of daily NAV returns). "
+        "Higher values mean more variability and therefore higher risk.[web:118]"
+    )
+else:
+    st.info("No sufficient NAV history to compute risk for selected funds.")
+st.caption( "---------------")	
+# --------- Visual CAGR comparison: one bar chart per scheme ---------
+if not perf_df.empty:
+    st.markdown("#### Visual CAGR comparison – 1Y, 3Y, 5Y, 10Y per fund")
+
+    cagr_numeric_df = perf_df.copy()
+    for h in HORIZONS_YEARS:
+        col = f"{h}Y CAGR"
+        cagr_numeric_df[col] = (
+            cagr_numeric_df[col]
+            .str.replace("%", "", regex=False)
+            .replace("N/A", np.nan)
+            .astype(float)
+        )
+
+    for _, row in cagr_numeric_df.iterrows():
+        scheme_name = row["Scheme Name"]
+        data_rows = []
+        for h in HORIZONS_YEARS:
+            col = f"{h}Y CAGR"
+            val = row[col]
+            if not pd.isna(val):
+                data_rows.append({"Horizon": f"{h}Y", "CAGR": val})
+
+        if not data_rows:
+            continue
+
+        df_scheme = pd.DataFrame(data_rows)
+        df_scheme["CAGR_label"] = df_scheme["CAGR"].round(2).astype(str) + "%"
+
+        fig_scheme = px.bar(
+            df_scheme,
+            x="Horizon",
+            y="CAGR",
+            text="CAGR_label",
+            title=f"{scheme_name} – CAGR for 1Y / 3Y / 5Y / 10Y",
+        )
+
+        fig_scheme.update_traces(
+            textposition="outside",
+            marker=dict(line=dict(width=1.5, color="black")),
+        )
+
+        fig_scheme.update_layout(
+            yaxis_title="CAGR (%)",
+            height=350,
+            xaxis_title="Duration",
+        )
+
+        st.plotly_chart(fig_scheme, config={"responsive": True})
+
+# ---------------- SIMPLE FUND RETURNS (NO BENCHMARK) ----------------
+st.markdown("---")
+st.subheader("Fund 1 / 3 / 5 / 10 Year CAGR (No Benchmark)")
+
+if not perf_df.empty:
+    cagr_cols = ["Scheme Code", "Scheme Name"] + [f"{h}Y CAGR" for h in HORIZONS_YEARS]
+    fund_cagr_df = perf_df[cagr_cols].copy()
+    st.dataframe(fund_cagr_df, width="stretch")
+else:
+    st.info("No CAGR data to display in the summary table.")
+
+# ---------------- NAV TREND ----------------
+st.markdown("---")
+st.subheader("NAV Trend – Last 10 Years (if available)")
+
+chart_list = []
+for _, row in selected_rows.iterrows():
+    code = row["schemeCode"]
+    name = row["schemeName"]
+
+    df_nav = nav_histories.get(code, pd.DataFrame())
+    if df_nav.empty:
+        continue
+    df_plot = df_nav.copy()
+    df_plot["Scheme Name"] = name
+    chart_list.append(df_plot)
+
+if chart_list:
+    nav_all = pd.concat(chart_list, ignore_index=True)
+
+    fig = px.line(
+        nav_all,
+        x="Date",
+        y="NAV",
+        color="Scheme Name",
+        title="NAV History – Selected Funds (Smoothed)",
+        line_shape="spline",
+        render_mode="svg",
+    )
+
+    fig.update_traces(line=dict(width=2))
+
+    fig.update_layout(
+        height=450,
+        margin=dict(l=10, r=10, t=60, b=50),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="center",
+            x=0.5,
+            font=dict(size=9),
+        ),
+        xaxis=dict(
+            title="Date",
+            tickangle=0,
+            tickfont=dict(size=8),
+            showgrid=False,
+            nticks=6,
+        ),
+        yaxis=dict(
+            title="NAV",
+            tickfont=dict(size=8),
+            showgrid=True,
+        ),
+    )
+
+    st.plotly_chart(fig, use_container_width=True, config={"responsive": True})
+else:
+    st.info("No NAV history available for selected funds.")
+
+# ---------------- YOY RETURNS ----------------
+st.markdown("---")
+st.subheader("Year-on-Year (YoY) NAV-based Returns (Approx XIRR)")
+
+fund_for_yoy = st.selectbox(
+    "Select a fund (from above selection) for detailed YoY returns",
+    options=selected_rows["schemeName"].tolist(),
+)
+
+yoy_rows = []
+# FIX: use 'schemeName' column here (not 'Scheme Name')
+for _, row in selected_rows[selected_rows["schemeName"] == fund_for_yoy].iterrows():
+    code = row["schemeCode"]
+    name = row["schemeName"]
+    df_nav = nav_histories.get(code, pd.DataFrame())
+    if df_nav.empty:
+        continue
+
+    df_nav = df_nav.copy()
+    df_nav["Year"] = df_nav["Date"].dt.year
+
+    grp = df_nav.groupby("Year")
+    for yr, g in grp:
+        if g.shape[0] < 2:
+            continue
+        g = g.sort_values("Date")
+        start_nav = g.iloc[0]["NAV"]
+        end_nav = g.iloc[-1]["NAV"]
+        ret = end_nav / start_nav - 1.0
+        yoy_rows.append(
+            {
+                "Scheme Name": name,
+                "Year": int(yr),
+                "YoY Return (approx XIRR)": fmt_pct(ret),
+            }
+        )
+
+if yoy_rows:
+    yoy_df = pd.DataFrame(yoy_rows).sort_values("Year", ascending=False)
+    st.dataframe(yoy_df, width="stretch")
+    st.caption(
+        "YoY returns above are NAV-based approximations and not true XIRR "
+        "(which requires actual cash-flow data from your investments).[web:118]"
+    )
+else:
+    st.info("Not enough data to compute YoY returns for the selected fund.")
+
