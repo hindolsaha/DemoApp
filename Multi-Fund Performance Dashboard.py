@@ -84,7 +84,7 @@ def get_horizon_returns(df: pd.DataFrame, horizons_years=HORIZONS_YEARS):
     if df.empty:
         return {f"{h}Y": {"cagr": None, "avg": None} for h in horizons_years}
 
-    df = df.sort_values("Date")                           
+    df = df.sort_values("Date")
     today = df["Date"].max()
     results = {}
     for h in horizons_years:
@@ -100,10 +100,8 @@ def get_horizon_returns(df: pd.DataFrame, horizons_years=HORIZONS_YEARS):
         days_diff = (df_h.iloc[-1]["Date"] - df_h.iloc[0]["Date"]).days
         years_diff = max(days_diff / 365.25, 0.1)
 
-        cagr = calc_cagr(start_nav, end_nav, years_diff)         
-        #cagr = calc_cagr(start_nav, end_nav, float(h))
+        cagr = calc_cagr(start_nav, end_nav, years_diff)
 
-        df_h = df_h.sort_values("Date")
         df_h["daily_ret"] = df_h["NAV"].pct_change()
         avg_daily = df_h["daily_ret"].dropna().mean()
         if pd.isna(avg_daily):
@@ -152,12 +150,11 @@ def filter_by_fund_type(df: pd.DataFrame, fund_type: str) -> pd.DataFrame:
 st.title("Mutual Fund Multi-Fund Performance Dashboard")
 st.caption(
     "Source: MFAPI.in – NAV-based approximations for 1, 3, 5, 10 year trends. "
-    "XIRR shown here is approximated using NAV, not actual cash flows.[web:112][web:113]"
+    "XIRR shown here is approximated using NAV, not actual cash flows.[web:113][web:125]"
 )
 
 schemes_df = load_all_schemes_df()
 
-# ---- Last data refresh status ----
 st.markdown(
     f"**Data status:** Fetched from MFAPI.in on "
     f"{datetime.today().strftime('%d-%b-%Y %H:%M')} (local time)."
@@ -196,7 +193,6 @@ if options_df.empty:
     st.stop()
 
 fund_names = options_df["schemeName"].sort_values().tolist()
-
 default_selection = [f for f in DEFAULT_FUNDS if f in fund_names]
 
 with col_sel2:
@@ -230,129 +226,150 @@ for _, row in selected_rows.iterrows():
     df_nav = fetch_history_days(code, days=365 * 10)
     nav_histories[code] = df_nav
 
-    # Horizon-wise returns
     ret_map = get_horizon_returns(df_nav, horizons_years=HORIZONS_YEARS)
 
     data = {
         "Scheme Code": code,
         "Scheme Name": name,
     }
-    # Track whether at least one horizon has valid data for this fund
-    has_any_value = False                        
+
+    has_any_value = False
+
     for h in HORIZONS_YEARS:
         key = f"{h}Y"
-        data[f"{key} CAGR"] = fmt_pct(ret_map[key]["cagr"])
-        data[f"{key} Avg"] = fmt_pct(ret_map[key]["avg"])
+        cagr_val = ret_map[key]["cagr"]
+        avg_val = ret_map[key]["avg"]
 
-    perf_rows.append(data)
+        if (cagr_val is not None and not pd.isna(cagr_val)) or (
+            avg_val is not None and not pd.isna(avg_val)
+        ):
+            has_any_value = True
 
-    # Risk: annualized volatility from daily NAV returns
-    if not df_nav.empty:
-        df_r = df_nav.sort_values("Date").copy()
-        df_r["daily_ret"] = df_r["NAV"].pct_change()
-        daily_std = df_r["daily_ret"].dropna().std()
-        if pd.isna(daily_std):
-            ann_vol = None
+        data[f"{key} CAGR"] = fmt_pct(cagr_val)
+        data[f"{key} Avg"] = fmt_pct(avg_val)
+
+    if has_any_value:
+        perf_rows.append(data)
+
+        if not df_nav.empty:
+            df_r = df_nav.sort_values("Date").copy()
+            df_r["daily_ret"] = df_r["NAV"].pct_change()
+            daily_std = df_r["daily_ret"].dropna().std()
+            ann_vol = daily_std * np.sqrt(252) if not pd.isna(daily_std) else None
         else:
-            ann_vol = daily_std * np.sqrt(252)
-    else:
-        ann_vol = None
+            ann_vol = None
 
-    risk_rows.append(
-        {
-            "Scheme Code": code,
-            "Scheme Name": name,
-            "Annualized Volatility (Risk)": fmt_pct(ann_vol),
-        }
-    )
+        risk_rows.append(
+            {
+                "Scheme Code": code,
+                "Scheme Name": name,
+                "Annualized Volatility (Risk)": fmt_pct(ann_vol),
+            }
+        )
 
 perf_df = pd.DataFrame(perf_rows)
+
+if perf_df.empty:
+    st.warning("No valid 1/3/5/10 year data could be computed for the selected funds.")
+else:
+    st.dataframe(perf_df, width=1000)
 
 # ---------------- RISK FACTOR SECTION ----------------
 st.markdown("---")
 st.subheader("Risk Factor – Annualized Volatility for Selected Schemes")
 
 risk_df = pd.DataFrame(risk_rows)
-st.dataframe(risk_df, width="stretch")
+if not risk_df.empty:
+    st.dataframe(risk_df, width="stretch")
 
-risk_numeric = risk_df.copy()
-risk_numeric["Risk_Value"] = (
-    risk_numeric["Annualized Volatility (Risk)"]
-    .str.replace("%", "", regex=False)
-    .replace("N/A", np.nan)
-    .astype(float)
-)
-
-fig_risk = px.bar(
-    risk_numeric,
-    x="Scheme Name",
-    y="Risk_Value",
-    title="Annualized Volatility (Risk) – Higher = More Volatile",
-)
-fig_risk.update_layout(
-    yaxis_title="Annualized Volatility (%)",
-    xaxis_title="Scheme",
-    height=400,
-)
-st.plotly_chart(fig_risk, use_container_width=True, config={"responsive": True})
-
-st.caption(
-    "Risk is approximated here as annualized volatility (standard deviation of daily NAV returns). "
-    "Higher values mean more variability and therefore higher risk."
-)
-
-# --------- Visual CAGR comparison: one bar chart per scheme (stacked vertically) ---------
-st.markdown("#### Visual CAGR comparison (one chart below another)")
-
-cagr_numeric_df = perf_df.copy()
-for h in HORIZONS_YEARS:
-    col = f"{h}Y CAGR"
-    cagr_numeric_df[col] = (
-        cagr_numeric_df[col]
+    risk_numeric = risk_df.copy()
+    risk_numeric["Risk_Value"] = (
+        risk_numeric["Annualized Volatility (Risk)"]
         .str.replace("%", "", regex=False)
         .replace("N/A", np.nan)
         .astype(float)
     )
 
-for _, row in cagr_numeric_df.iterrows():
-    scheme_name = row["Scheme Name"]
-    data_rows = []
+    fig_risk = px.bar(
+        risk_numeric,
+        x="Scheme Name",
+        y="Risk_Value",
+        title="Annualized Volatility (Risk) – Higher = More Volatile",
+    )
+    fig_risk.update_layout(
+        yaxis_title="Annualized Volatility (%)",
+        xaxis_title="Scheme",
+        height=400,
+    )
+    st.plotly_chart(fig_risk, use_container_width=True, config={"responsive": True})
+
+    st.caption(
+        "Risk is approximated here as annualized volatility (standard deviation of daily NAV returns). "
+        "Higher values mean more variability and therefore higher risk.[web:118]"
+    )
+else:
+    st.info("No sufficient NAV history to compute risk for selected funds.")
+
+# --------- Visual CAGR comparison: one bar chart per scheme ---------
+if not perf_df.empty:
+    st.markdown("#### Visual CAGR comparison – 1Y, 3Y, 5Y, 10Y per fund")
+
+    cagr_numeric_df = perf_df.copy()
     for h in HORIZONS_YEARS:
         col = f"{h}Y CAGR"
-        val = row[col]
-        data_rows.append({"Horizon": f"{h}Y", "CAGR": val})
+        cagr_numeric_df[col] = (
+            cagr_numeric_df[col]
+            .str.replace("%", "", regex=False)
+            .replace("N/A", np.nan)
+            .astype(float)
+        )
 
-    df_scheme = pd.DataFrame(data_rows)
-    df_scheme["CAGR_label"] = df_scheme["CAGR"].round(2).astype(str) + "%"
+    for _, row in cagr_numeric_df.iterrows():
+        scheme_name = row["Scheme Name"]
+        data_rows = []
+        for h in HORIZONS_YEARS:
+            col = f"{h}Y CAGR"
+            val = row[col]
+            if not pd.isna(val):
+                data_rows.append({"Horizon": f"{h}Y", "CAGR": val})
 
-    fig_scheme = px.bar(
-        df_scheme,
-        x="Horizon",
-        y="CAGR",
-        text="CAGR_label",
-        title=f"{scheme_name} – CAGR for 1Y / 3Y / 5Y / 10Y",
-    )
+        if not data_rows:
+            continue
 
-    fig_scheme.update_traces(
-        textposition="outside",
-        marker=dict(line=dict(width=1.5, color="black")),
-    )
+        df_scheme = pd.DataFrame(data_rows)
+        df_scheme["CAGR_label"] = df_scheme["CAGR"].round(2).astype(str) + "%"
 
-    fig_scheme.update_layout(
-        yaxis_title="CAGR (%)",
-        height=350,
-        xaxis_title="Duration",
-    )
+        fig_scheme = px.bar(
+            df_scheme,
+            x="Horizon",
+            y="CAGR",
+            text="CAGR_label",
+            title=f"{scheme_name} – CAGR for 1Y / 3Y / 5Y / 10Y",
+        )
 
-    st.plotly_chart(fig_scheme, config={"responsive": True})
+        fig_scheme.update_traces(
+            textposition="outside",
+            marker=dict(line=dict(width=1.5, color="black")),
+        )
+
+        fig_scheme.update_layout(
+            yaxis_title="CAGR (%)",
+            height=350,
+            xaxis_title="Duration",
+        )
+
+        st.plotly_chart(fig_scheme, config={"responsive": True})
 
 # ---------------- SIMPLE FUND RETURNS (NO BENCHMARK) ----------------
 st.markdown("---")
 st.subheader("Fund 1 / 3 / 5 / 10 Year CAGR (No Benchmark)")
 
-cagr_cols = ["Scheme Code", "Scheme Name"] + [f"{h}Y CAGR" for h in HORIZONS_YEARS]
-fund_cagr_df = perf_df[cagr_cols].copy()
-st.dataframe(fund_cagr_df, width="stretch")
+if not perf_df.empty:
+    cagr_cols = ["Scheme Code", "Scheme Name"] + [f"{h}Y CAGR" for h in HORIZONS_YEARS]
+    fund_cagr_df = perf_df[cagr_cols].copy()
+    st.dataframe(fund_cagr_df, width="stretch")
+else:
+    st.info("No CAGR data to display in the summary table.")
 
 # ---------------- NAV TREND ----------------
 st.markdown("---")
@@ -424,6 +441,7 @@ fund_for_yoy = st.selectbox(
 )
 
 yoy_rows = []
+# FIX: use 'schemeName' column here (not 'Scheme Name')
 for _, row in selected_rows[selected_rows["schemeName"] == fund_for_yoy].iterrows():
     code = row["schemeCode"]
     name = row["schemeName"]
@@ -455,7 +473,7 @@ if yoy_rows:
     st.dataframe(yoy_df, width="stretch")
     st.caption(
         "YoY returns above are NAV-based approximations and not true XIRR "
-        "(which requires actual cash-flow data from your investments)."
+        "(which requires actual cash-flow data from your investments).[web:118]"
     )
 else:
     st.info("Not enough data to compute YoY returns for the selected fund.")
@@ -725,4 +743,4 @@ if action == "Goal-based Target Amount – Suggest Best 2 Funds (10Y CAGR)":
         st.caption(
             "Above suggestions are based purely on 10-year NAV-based CAGR of selected funds "
             "and standard compound interest formulas. They are indicative only, not investment advice."
-        )
+        )													
