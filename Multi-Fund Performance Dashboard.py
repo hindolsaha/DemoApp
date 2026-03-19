@@ -11,32 +11,7 @@ st.set_page_config(
     page_icon="📈",
     layout="wide",
 )
-#---Back ground colour changes added
-# ---------- GLOBAL DARK THEME (black background) ----------
-st.markdown(
-    """
-    <style>
-    /* Main background */
-    .stApp {
-        background-color: #000000;
-        color: #f0f0f0;
-    }
-    /* Text elements */
-    h1, h2, h3, h4, h5, h6, p, span, label, div, .markdown-text-container {
-        color: #f0f0f0 !important;
-    }
-    /* Dataframe background */
-    .stDataFrame, .stTable {
-        background-color: #111111 !important;
-    }
-    /* Widgets background */
-    .stSelectbox, .stMultiSelect, .stNumberInput, .stTextInput, .stRadio {
-        color: #f0f0f0 !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+
 #------------------Changes ended------------------
 # ---------------- CONFIG ----------------
 MAX_FUNDS = 20
